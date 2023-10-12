@@ -4,6 +4,6 @@ use clap::Parser;
 
 mod cli_util;
 
-fn main() -> Result<(), ZapError> {
+fn main() -> Result<(), anyhow::Error> {
     Args::parse().execute()
 }

@@ -24,6 +24,40 @@ use walkdir::WalkDir;
 
 pub struct Processor {}
 
+pub fn build_common_extension(enc: &EncryptionType, comp: &CompressionType) -> String {
+    let mut ext = String::new();
+
+    match enc {
+        EncryptionType::Passthrough => (),
+        EncryptionType::XChaCha => ext.push_str(".xcha"),
+        EncryptionType::AesGcm => ext.push_str(".aes"),
+        EncryptionType::ChaCha => ext.push_str(".cha"),
+    }
+
+    match comp {
+        CompressionType::Passthrough => (),
+        CompressionType::Lz4 => ext.push_str(".lz4"),
+        CompressionType::Gzip => ext.push_str(".gz"),
+        CompressionType::Snappy => ext.push_str(".sz"),
+    }
+    
+    ext
+}
+
+fn rewrite_ext(path: &Path, extension: &str) -> Result<PathBuf, CompressionError> {
+    match path.extension() {
+        Some(ext) => {
+            let base = match ext.to_str() {
+                Some(b) => b,
+                None => return Err(CompressionError::ExtensionRewriteError("Failed to convert extension to string".into())),
+            };
+
+            Ok(path.with_extension(format!("{}{}", base, extension)))
+        },
+        None => Ok(path.with_extension(extension)),
+    }
+}
+
 pub fn compress_directory(
     input_folder_path: &str,
     output_folder_path: &str,
@@ -40,6 +74,8 @@ pub fn compress_directory(
     let thread_pool = ThreadPoolBuilder::new().num_threads(avail_thread).build()?;
 
     let wg = WaitGroup::new();
+
+    let common_extension = build_common_extension(&encryption, &compression);
 
     let encryption_ref = Arc::new(encryption);
     let compression_ref = Arc::new(compression);
@@ -67,7 +103,7 @@ pub fn compress_directory(
             Err(e) => panic!("Error: {:?}", e), // TODO: Graceful cleanup
         };
 
-        let output_path = path::Path::new(output_folder_path).join(rewrite_ext(parent_path));
+        let output_path = path::Path::new(output_folder_path).join(rewrite_ext(parent_path, &common_extension)?);
 
         debug!(
             "Compressing: {:?} -> {:?}",
@@ -253,9 +289,3 @@ pub fn decompress_directory(
     Ok(())
 }
 
-fn rewrite_ext(path: &Path) -> PathBuf {
-    match path.extension() {
-        Some(ext) => path.with_extension(format!("{}.lz4", ext.to_str().unwrap())),
-        None => path.with_extension("lz4"),
-    }
-}

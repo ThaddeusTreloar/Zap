@@ -1,5 +1,6 @@
 mod compression;
 mod encryption;
+mod error;
 mod logging;
 mod password;
 
@@ -8,14 +9,15 @@ use std::{
     io::BufWriter,
 };
 
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 
 use log::info;
-use zap::{encryption::EncryptionSecret, error::ZapError};
+use zap::{encryption::EncryptionSecret, build_common_extension};
 
 use zapf::{pack_files, unpack_files};
 
-use crate::cli_util::{logging::init_logger, password::get_password_confirm};
+use crate::cli_util::{logging::init_logger, password::get_password_confirm, error::RuntimeError};
 
 use self::{
     compression::{BinCompressionType, CompressionLevel},
@@ -37,7 +39,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn execute(self) -> Result<(), ZapError> {
+    pub fn execute(self) -> Result<(), anyhow::Error> {
         self.command.execute()
     }
 }
@@ -48,8 +50,9 @@ enum Command {
     Archive {
         /// Input folder
         input: String,
+        #[arg(short, long)]
         /// Output file
-        output: String,
+        output: Option<String>,
         /// Encrypt using default algorithm (XChaChaPoly1305)
         #[arg(short, long)]
         encrypt: bool,
@@ -76,6 +79,7 @@ enum Command {
     Extract {
         /// Input file
         input: String,
+        //#[arg(short, long)]
         /// Output folder
         output: String,
         #[arg(short, long)]
@@ -106,7 +110,7 @@ enum Command {
 }
 
 impl Command {
-    pub fn execute(self) -> Result<(), ZapError> {
+    pub fn execute(self) -> Result<(), anyhow::Error> {
         match self {
             Command::Archive {
                 input,
@@ -169,14 +173,14 @@ impl Command {
 
     fn archive(
         input: String,
-        output: String,
+        output: Option<String>,
         keypath: Option<String>,
         verbosity: Verbosity,
         encryption_algorithm: BinEncryptionType,
         compression_algorithm: BinCompressionType,
         compression_level: CompressionLevel,
-    ) -> Result<(), ZapError> {
-        preamble(verbosity)?;
+    ) -> Result<(), anyhow::Error> {
+        preamble(verbosity).context("Running preamble.")?;
 
         let encryption_secret: EncryptionSecret = match (&encryption_algorithm, keypath) {
             (BinEncryptionType::Passthrough, _) => EncryptionSecret::None,
@@ -187,8 +191,9 @@ impl Command {
             }),
         };
 
-        info!("Encryption: {:?}", encryption_algorithm);
-        info!("Compression: {:?}", compression_algorithm);
+        // TODO : Remove these clones
+        let mut out_extension = build_common_extension(&encryption_algorithm.clone().into(), &compression_algorithm.clone().into());
+        out_extension.push_str(".zap");
 
         zap::compress_directory(
             &input,
@@ -198,15 +203,17 @@ impl Command {
             compression_algorithm.into(),
             compression_level.into(),
             zap::signing::SigningType::default(),
-        )?;
+        ).context("Compressing directory.")?;
 
-        let out_file = File::create(output).expect("Could not create file");
+        let out_name = format!("{}{}", input.trim_end_matches('.'), out_extension);
+
+        let out_file = File::create(out_name).context("Creating output file")?;
 
         let mut out_writer = BufWriter::new(out_file);
 
-        pack_files("/tmp/unpacked", &mut out_writer)?;
+        pack_files("/tmp/unpacked", &mut out_writer).context("Packing files")?;
 
-        Ok(fs::remove_dir_all("/tmp/unpacked")?)
+        fs::remove_dir_all("/tmp/unpacked").context("Cleaning up...")
     }
 
     fn extract(
@@ -216,8 +223,8 @@ impl Command {
         verbosity: Verbosity,
         encryption_algorithm: BinEncryptionType,
         compression_algorithm: BinCompressionType,
-    ) -> Result<(), ZapError> {
-        preamble(verbosity)?;
+    ) -> Result<(), anyhow::Error> {
+        preamble(verbosity).context("Running preamble")?;
 
         let encryption_secret: EncryptionSecret = match (&encryption_algorithm, keypath) {
             (BinEncryptionType::Passthrough, _) => EncryptionSecret::None,
@@ -230,7 +237,7 @@ impl Command {
 
         // Need to check if this function validates path names
         // to prevent directory traversal.
-        unpack_files(input, "/tmp/unpacked")?;
+        unpack_files(input, "/tmp/unpacked").context("Unpacking files.")?;
 
         zap::decompress_directory(
             "/tmp/unpacked",
@@ -239,23 +246,22 @@ impl Command {
             encryption_secret,
             compression_algorithm.into(),
             zap::signing::SigningType::default(),
-        )?;
+        ).context("Decompressing directory.")?;
 
-        Ok(fs::remove_dir_all("/tmp/unpacked")?)
-        //Ok(())
+        fs::remove_dir_all("/tmp/unpacked").context("Cleaning up.")
     }
 
-    fn list(archive: String, verbosity: Verbosity) -> Result<(), ZapError> {
-        preamble(verbosity)?;
+    fn list(archive: String, verbosity: Verbosity) -> Result<(), anyhow::Error> {
+        preamble(verbosity).context("Running preamble")?;
 
         info!("Listing archive: {}", archive);
 
-        Err(ZapError::NotImplemented("Archive listing not yet implemented.".into()))
+        Err(RuntimeError::NotYetImplemented("Listing archives").into())
     }
 }
 
-fn preamble(verbosity: Verbosity) -> Result<(), ZapError> {
-    init_logger(verbosity)?;
+fn preamble(verbosity: Verbosity) -> Result<(), anyhow::Error> {
+    init_logger(verbosity).context("Initialising logger")?;
 
     log::debug!("pid: {}", std::process::id());
 
