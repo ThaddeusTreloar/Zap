@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{copy, Read, Write},
-    path::PathBuf, sync::Arc,
+    path::PathBuf
 };
 
 use crate::{
@@ -20,55 +20,160 @@ use crate::{
     },
 };
 
-#[derive(Default)]
-pub struct ProcessingPipeline {
-    encryption: Arc<EncryptionType>,
-    encryption_secret: Arc<EncryptionSecret>,
-    compression: Arc<CompressionType>,
-    compression_level: Arc<flate2::Compression>,
-    signing: Arc<SigningType>,
+pub struct ProcessingPipelineBuilder<'a, E, ES, C, CL, SV, S, D> {
+    encryption: E,
+    encryption_secret: ES,
+    compression: C,
+    compression_level: CL,
+    signing: SV,
+    source: S,
+    destination: D,
+    phantom: std::marker::PhantomData<&'a ()>,
+}
+
+
+impl <'a, E, ES, C, CL, SV, S, D> ProcessingPipelineBuilder<'a, E, ES, C, CL, SV, S, D> {
+    pub fn new() -> ProcessingPipelineBuilder<'a, (), (), (), (), (), (), ()> {
+        ProcessingPipelineBuilder {
+            encryption: (),
+            encryption_secret: (),
+            compression: (),
+            compression_level: (),
+            signing: (),
+            source: (),
+            destination: (),
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    pub fn with_encryption(self, encryption: &'a EncryptionType) -> ProcessingPipelineBuilder<'a, &EncryptionType, ES, C, CL, SV, S, D> {
+        ProcessingPipelineBuilder {
+            encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_encryption_secret(self, encryption_secret: &'a EncryptionSecret) -> ProcessingPipelineBuilder<'a, E, &EncryptionSecret, C, CL, SV, S, D> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_compression(self, compression: &'a CompressionType) -> ProcessingPipelineBuilder<'a, E, ES, &CompressionType, CL, SV, S, D> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_compression_level(self, compression_level: &'a flate2::Compression) -> ProcessingPipelineBuilder<'a, E, ES, C, &flate2::Compression, SV, S, D> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_signing(self, signing: &'a SigningType) -> ProcessingPipelineBuilder<'a, E, ES, C, CL, &SigningType, S, D> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing,
+            source: self.source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_source(self, source: PathBuf) -> ProcessingPipelineBuilder<'a, E, ES, C, CL, SV, PathBuf, D> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source,
+            destination: self.destination,
+            phantom: self.phantom,
+        }
+    }
+
+    pub fn with_destination(self, destination: PathBuf) -> ProcessingPipelineBuilder<'a, E, ES, C, CL, SV, S, PathBuf> {
+        ProcessingPipelineBuilder {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination,
+            phantom: self.phantom,
+        }
+    }
+}
+
+impl <'a> ProcessingPipelineBuilder<
+    'a,
+    &'a EncryptionType,
+    &'a EncryptionSecret,
+    &'a CompressionType,
+    &'a flate2::Compression,
+    &'a SigningType,
+    PathBuf,
+    PathBuf
+> {
+    pub fn build(self) -> ProcessingPipeline<'a> {
+        ProcessingPipeline {
+            encryption: self.encryption,
+            encryption_secret: self.encryption_secret,
+            compression: self.compression,
+            compression_level: self.compression_level,
+            signing: self.signing,
+            source: self.source,
+            destination: self.destination,
+        }
+    }
+}
+
+pub struct ProcessingPipeline<'a> {
+    encryption: &'a EncryptionType,
+    encryption_secret: &'a EncryptionSecret,
+    compression: &'a CompressionType,
+    compression_level: &'a flate2::Compression,
+    signing: &'a SigningType,
     source: PathBuf,
     destination: PathBuf,
 }
 
-impl ProcessingPipeline {
-    pub fn new() -> ProcessingPipeline {
-        ProcessingPipeline::default()
-    }
-
-    pub fn with_encryption(mut self, encryption: Arc<EncryptionType>) -> Self {
-        self.encryption = encryption;
-        self
-    }
-
-    pub fn with_encryption_secret(mut self, encryption_secret: Arc<EncryptionSecret>) -> Self {
-        self.encryption_secret = encryption_secret;
-        self
-    }
-
-    pub fn with_compression(mut self, compression: Arc<CompressionType>) -> Self {
-        self.compression = compression;
-        self
-    }
-
-    pub fn with_compression_level(mut self, compression_level: Arc<flate2::Compression>) -> Self {
-        self.compression_level = compression_level;
-        self
-    }
-
-    pub fn with_signing(mut self, signing: Arc<SigningType>) -> Self {
-        self.signing = signing;
-        self
-    }
-
-    pub fn with_source(mut self, source: PathBuf) -> Self {
-        self.source = source;
-        self
-    }
-
-    pub fn with_destination(mut self, destination: PathBuf) -> Self {
-        self.destination = destination;
-        self
+impl <'a> ProcessingPipeline<'a> {
+    pub fn builder() -> ProcessingPipelineBuilder<'a, (), (), (), (), (), (), ()> {
+        ProcessingPipelineBuilder::<'a, (), (), (), (), (), (), ()>::new()
     }
 
     pub fn compress_dir(self) -> Result<(), PipelineCompressionError> {

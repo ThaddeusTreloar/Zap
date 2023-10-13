@@ -3,16 +3,17 @@ mod encryption;
 mod error;
 mod logging;
 mod password;
+mod util;
 
 use std::{
     fs::{self, File},
-    io::BufWriter,
+    io::BufWriter, path::PathBuf,
 };
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 
-use log::info;
+use log::{info, debug};
 use zap::{encryption::EncryptionSecret, build_common_extension};
 
 use zapf::{pack_files, unpack_files};
@@ -50,7 +51,7 @@ enum Command {
     Archive {
         /// Input folder
         input: String,
-        #[arg(short, long)]
+        #[arg(short, long, default_value = None)]
         /// Output file
         output: Option<String>,
         /// Encrypt using default algorithm (XChaChaPoly1305)
@@ -79,15 +80,10 @@ enum Command {
     Extract {
         /// Input file
         input: String,
-        //#[arg(short, long)]
-        /// Output folder
-        output: String,
+        #[arg(short, long, default_value = None)]
+        /// Output file
+        output: Option<String>,
         #[arg(short, long)]
-        /// Decrypt using default algorithm (XChaChaPoly1305)
-        encrypt: bool,
-        #[arg(short, long)]
-        /// Decompress using default algorithm (Lz4)
-        compress: bool,
         /// Path to private key file (not currently supported)
         #[arg(short, long)]
         keypath: Option<String>,
@@ -144,23 +140,58 @@ impl Command {
             Command::Extract {
                 input,
                 output,
-                encrypt: encryption,
-                compress: compression,
                 keypath,
                 verbosity,
                 mut encryption_algorithm,
                 mut compression_algorithm,
-            } => {
-                if let (true, BinEncryptionType::Passthrough) = (encryption, &encryption_algorithm) {
-                    encryption_algorithm = BinEncryptionType::XChaCha;
+            } => {               
+                let input_file_path: PathBuf = PathBuf::from(&input);
+
+                if !input_file_path.is_file() {
+                    return Err(RuntimeError::FileNotFound(input_file_path.to_string_lossy().into()).into());
                 }
 
-                if let (true, BinCompressionType::Passthrough) = (compression, &compression_algorithm) {
-                    compression_algorithm = BinCompressionType::Lz4;
+                let mut input_file_extensions: Vec<&str> = match input_file_path
+                    .file_name() {
+                        Some(ext) => ext.to_str()
+                            .expect("Unable to convert extension to string.")
+                            .split('.')
+                            .rev().collect(),
+                        None => return Err(RuntimeError::FileNotFound(input_file_path.to_string_lossy().into()).into()),
+                    };
+
+                println!("input_file_extensions: {:?}", input_file_extensions);
+
+                for ext in input_file_extensions.iter() {
+                    match *ext {
+                        "xcha" => encryption_algorithm = BinEncryptionType::XChaCha,
+                        "aes" => encryption_algorithm = BinEncryptionType::AesGcm,
+                        "cha" => encryption_algorithm = BinEncryptionType::ChaCha,
+                        "lz4" => compression_algorithm = BinCompressionType::Lz4,
+                        "gz" => compression_algorithm = BinCompressionType::Gzip,
+                        "sz" => compression_algorithm = BinCompressionType::Snappy,
+                        _ => (),
+                    }
                 }
+
+                input_file_extensions
+                    .retain(|ext| !["xcha", "aes", "cha", "lz4", "gz", "sz"].contains(ext));
+
+                input_file_extensions.reverse();
+
                 Self::extract(
                     input,
-                    output,
+                    match output {
+                        Some(path) => path,
+                        None => input_file_path
+                            .parent()
+                            .expect("UNable to get parent directory.")
+                            .join(
+                                input_file_extensions.join(".")
+                            )
+                            .with_extension("")
+                            .to_str().expect("msg").to_string(),
+                    },
                     keypath,
                     verbosity,
                     encryption_algorithm,

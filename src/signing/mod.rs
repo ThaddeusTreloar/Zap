@@ -54,7 +54,7 @@ where T: Decompress
     fn verifier(&self, reader: T) -> Result<Self::Verifier, SignerInitError>;
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum SigningType {
     #[default]
     Passthrough,

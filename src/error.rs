@@ -91,8 +91,17 @@ pub enum CompressionError {
     FailedToWalkDirectory(#[from] walkdir::Error),
     #[error("Failed to compress file: {0}")]
     IOError(#[from] std::io::Error),
-    #[error("Failed to rewrite file extension: {0}")]
-    ExtensionRewriteError(String)
+    #[error(transparent)]
+    PathRewriteError(#[from] PathRewriteError)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PathRewriteError {
+    #[error("Failed to convert OsStr to str: {0}")]
+    TypeConversionError(String),
+    #[error("Failed to get file_name for: {0}")]
+    FileNameError(String),
+
 }
 
 #[derive(Debug, thiserror::Error)] 

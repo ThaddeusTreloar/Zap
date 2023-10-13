@@ -12,29 +12,25 @@ To install Zap, run the following command from the project root:
 
 ### In order to **compress** a folder with Zap, run:
 
-`zap archive [INPUT] [OUTPUT]`
-
-Where the `[OUTPUT]` is the path to which you want to store the `.zap` file. Eg:
+`zap archive [INPUT] [OPTIONS]` Eg:
 
 ```
-zap archive /path/to/dir ./dir.zap -ce
+zap archive /path/to/dir -ce
 ```
 
 Using `zap archive --help` will list the available options for encryption and compression.
 
 ### In order to **decompress** a Zap archive
 
-`zap extract [ARCHIVE] [OUTPUT]`
+`zap extract [ARCHIVE]`
 
-Where the `[ARCHIVE]` is the path to the file which you want to extract and the `[OUTPUT]` is the folder in which you want the contents to be placed inside.
+Where the `[ARCHIVE]` is the path to the file which you want to extract.
 
 Using `zap archive --help` will list the available options for encryption and compression.
 
 ```
-zap extract ./dir.zap ./dir -ce
+zap extract ./dir.zap
 ```
-
-Unfortunately, in it's current state, that compression and encryption methods aren't stored in metadata and must be given when extracting. this will be fixed in coming releases.
 
 ### In order to **list** the contents of a Zap archive
 
