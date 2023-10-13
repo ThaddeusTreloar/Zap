@@ -1,6 +1,6 @@
 [package]
 name = "zap"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
     "Steve Gremory <stevegremory2006@gmail.com>",
     "Speykious <speykious@gmail.com>",
