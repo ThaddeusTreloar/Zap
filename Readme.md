@@ -38,6 +38,12 @@ zap extract ./dir.zap
 
 *coming soon*
 
+### In order to **rotate** the secrets of a Zap archive
+
+`zap rotate [ARCHIVE]`
+
+*coming soon*
+
 ## License
 
 This project is licensed under the LGPL v3.

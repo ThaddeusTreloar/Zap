@@ -96,9 +96,17 @@ enum Command {
         /// Override compression algorithm used
         #[arg(long, default_value = "passthrough")]
         compression_algorithm: BinCompressionType,
+        #[arg(long)]
+        target_object: Option<String>
     },
     /// List contents of an archive
     List {
+        archive: String,
+        #[arg(short, long, default_value = "normal")]
+        verbosity: Verbosity,
+    },
+    /// Rotate the secrets of a Zap archive
+    Rotate {
         archive: String,
         #[arg(short, long, default_value = "normal")]
         verbosity: Verbosity,
@@ -144,6 +152,7 @@ impl Command {
                 verbosity,
                 mut encryption_algorithm,
                 mut compression_algorithm,
+                target_object,
             } => {               
                 let input_file_path: PathBuf = PathBuf::from(&input);
 
@@ -179,26 +188,41 @@ impl Command {
 
                 input_file_extensions.reverse();
 
-                Self::extract(
-                    input,
-                    match output {
-                        Some(path) => path,
-                        None => input_file_path
-                            .parent()
-                            .expect("UNable to get parent directory.")
-                            .join(
-                                input_file_extensions.join(".")
-                            )
-                            .with_extension("")
-                            .to_str().expect("msg").to_string(),
-                    },
-                    keypath,
-                    verbosity,
-                    encryption_algorithm,
-                    compression_algorithm,
-                )
+                let final_output = match output {
+                    Some(path) => path,
+                    None => input_file_path
+                        .parent()
+                        .expect("UNable to get parent directory.")
+                        .join(
+                            input_file_extensions.join(".")
+                        )
+                        .with_extension("")
+                        .to_str().expect("msg").to_string(),
+                };
+
+                if let Some(object) = target_object {
+                    Self::extract_target(
+                        input, 
+                        final_output, 
+                        keypath, 
+                        verbosity, 
+                        encryption_algorithm, 
+                        compression_algorithm, 
+                        object
+                    )
+                } else {
+                    Self::extract(
+                        input,
+                        final_output,
+                        keypath,
+                        verbosity,
+                        encryption_algorithm,
+                        compression_algorithm,
+                    )
+                }
             },
             Command::List { archive, verbosity } => Self::list(archive, verbosity),
+            Command::Rotate { archive, verbosity } => Self::rotate(archive, verbosity),
         }
     }
 
@@ -282,12 +306,36 @@ impl Command {
         fs::remove_dir_all("/tmp/unpacked").context("Cleaning up.")
     }
 
+    fn extract_target(
+        input: String,
+        output: String,
+        keypath: Option<String>,
+        verbosity: Verbosity,
+        encryption_algorithm: BinEncryptionType,
+        compression_algorithm: BinCompressionType,
+        target_object: String,
+    ) -> Result<(), anyhow::Error> {
+        preamble(verbosity).context("Running preamble")?;
+
+        info!("Extracting target object '{}' from archive: {}", target_object, input);
+
+        Err(RuntimeError::NotYetImplemented("Extracting target object").into())
+    }
+
     fn list(archive: String, verbosity: Verbosity) -> Result<(), anyhow::Error> {
         preamble(verbosity).context("Running preamble")?;
 
         info!("Listing archive: {}", archive);
 
         Err(RuntimeError::NotYetImplemented("Listing archives").into())
+    }
+
+    fn rotate(archive: String, verbosity: Verbosity) -> Result<(), anyhow::Error> {
+        preamble(verbosity).context("Running preamble")?;
+
+        info!("Rotating archive secrets: {}", archive);
+
+        Err(RuntimeError::NotYetImplemented("Rotating secrets").into())
     }
 }
 
